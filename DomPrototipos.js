@@ -5,12 +5,17 @@
 function DomElement(type, childrenDefinition) {
     this.type = type;
     this.styles = {};
+    this.eventsOn = {};
+    this.eventsOff = {};
     this.children = [];
 
     for (let index = 0; index < (childrenDefinition || []).length; index++) {
         var definition = childrenDefinition[index];
         var newElement = new DomElement(definition.type, definition.children);
         newElement.__proto__ = this;
+        if(definition.type === 'h1' || definition.type === 'p' && definition.contents !== undefined){
+            newElement.contents = definition.contents;
+        }
         this.children.push(newElement);
     }
 }
@@ -52,30 +57,39 @@ var definition = {
             children: [{
                 type: 'div',
                 children: [{
-                    type: 'h1'
+                    type: 'h1',
+                    contents: 'Hello World'
                 }, {
-                    type: 'p'
+                    type: 'p',
+                    contents: ''
                 }, {
-                    type: 'p'
+                    type: 'p',
+                    contents: ''
                 }]
             }, {
                 type: 'section',
                 children: [{
-                    type: 'h1'
+                    type: 'h1',
+                    contents: 'Here'
                 }, {
-                    type: 'p'
+                    type: 'p',
+                    contents: 'There'
                 }, {
-                    type: 'p'
+                    type: 'p',
+                    contents: ''
                 }]
             }]
         }, {
             type: 'aside',
             children: [{
-                type: 'h1'
+                type: 'h1',
+                contents: ''
             }, {
-                type: 'p'
+                type: 'p',
+                contents: ''
             }, {
-                type: 'p'
+                type: 'p',
+                contents: 'Are you there?'
             }]
         }]
     }]
@@ -126,36 +140,60 @@ var styles = {
 };
 
 /*
+Estos estilos simulan lo que se leería de un CSS. Y lo que queremos es
+poder aplicar todos estilos a nuestro DOM.
+
 El objetivo, es poder aplicar esos estilos a cada elemento del dom
 según indique la regla asociada.
+
 Ej. si la regla es "h1", entonces el estilo se aplica a todos los elementos
 de tipo h1, pero si es "body h1" entonces se aplica a los h1 que están
 dentro de body.
 
-Más aún, los estilos se heredan según jerarquía. Si por ejemplo, si
-"body" tiene color "red", entonces todos los hijos de body también
-tendrán color "red", salvo que haya una regla que indique lo contrario.
+Una característica importante de los estilos es que se heredan según jerarquía.
+Si por ejemplo, "body" tiene como estilo color "red", entonces todos los hijos
+de body también tendrán color "red", sin necesidad de agregar ese atributo a cada
+uno de los hijos.
 
-Se pide entonces que implemente el comportamiento de getStyle
-para que se le pueda preguntar a cualquier elemento del dom por sus
-estilos completos, que incluyen tanto los declarados como los heredados.
+Por ej. pensemos el siguiente grupo de nodos en el dom
 
-Luego cree un metodo "viewStyleHierarchy" que imprima todos los nodos
-con sus estilos completos (los propios y heredados), de forma similar a
-toString (pero con tooooooodos los estilos).
+Node html {}
+  Node head {}
+  Node body {background:red, color:blue}
+    Node div {}
+      Node div {size:17, color:green}
+        Node h1 {}
+
+Si bien h1 no tiene ningún estilo directamente asociado, sus "verdaderos"
+estilos son aquellos que surjen de heredar de sus padres.
+Entonces h1 tiene los estilos {background:red, size:17, color:green}. El
+color es verde ya que si un hijo tiene un estilo que tenía el padre,
+lo sobreescribe, de forma similar al overriding.
+
+Entonces haremos primero las siguientes cosas:
+a) Agregaremos el método a todo nodo del dom, addStyles, que dada
+una definición de estilos que representa un css, asigna los estilos
+de esa definición a los correspondientes nodos del DOM.
+
+b) Luego implemente para todo nodo el método getFullStyle que
+describe todos los estilos que tiene un nodo (que incluyen los
+propios y los heredados).
+
+c) Implemente para todo nodo el método viewStyleHierarchy, que
+funciona de forma similar a toString, pero en donde se muestran
+absolutamente todos los estilos, incluyendo los heredados, y
+no solo aquellos que tienen asociados.
 */
 
-DomElement.prototype.setStyleDom = function(styles) {
+
+DomElement.prototype.addStyles = function(styles) {
     for(let index = 0; index < this.children.length; index++) {
         var element = this.children[index];
         element.styles = { ...element.styles, ...this.styles };
-        if (styles[element.type]) {
+        if (styles[element.type] || styles[this.type + ' ' + element.type]) {
             element.styles = {...element.styles,...styles[element.type]};
         }
-        if (styles[this.type + ' ' + element.type]) {
-            element.styles = {...element.styles,...styles[this.type + ' ' + element.type]};
-        }
-        element.setStyleDom(styles);
+        element.addStyles(styles);
     }
 }
 
@@ -173,12 +211,14 @@ DomElement.prototype.getStyle = function(type) {
 DomElement.prototype.viewStyleHierarchy = function() {
     for(let index = 0; index < this.children.length; index++) {
         var element = this.children[index];
-        console.log(element.type, element.styles);
+        if(Object.keys(element.styles).length !== 0){
+            console.log("viewStyleHierarchy",element.type, element.styles);
+        }
         element.viewStyleHierarchy();
     }
 }
-
-dom.setStyleDom(styles);
+dom.viewStyleHierarchy();
+dom.addStyles(styles);
 console.log(dom.toString());
 dom.getStyle('div');
 
@@ -186,9 +226,12 @@ dom.viewStyleHierarchy();
 /**************** PUNTO 2 ******************************/
 
 /*
-Queremos agregar la idea de eventos, para que distintos elementos
-del DOM puedan reaccionar ante diversos eventos.
-Cada elemento del dom debe entender tres metodos más:
+Los elementos del DOM en un navegador pueden reaccionar a eventos
+que el usuario realiza sobre ellos. Vamos a simular ese proceso.
+
+Para que distintos elementos del DOM puedan reaccionar ante
+diversos eventos. Cada elemento del dom debe entender tres
+metodos más:
 
 * on(nombreDeEvento, handler)
 * off(nombreDeEvento)
@@ -215,6 +258,9 @@ dom.children[1].children[0].children[0].on('click', function() {
     return true;
 })
 
+Esto puede llegar a ser un problema, ya que hay que analizar quién es this,
+según el contexto de ejecución. Ojo.
+
 Por otro lado, cuando se hace el handling de un evento, este realiza
 el proceso de bubbling-up, es decir, todo padre que también sepa manejar
 el evento del mismo nombre debe activar el evento.
@@ -222,9 +268,10 @@ el evento del mismo nombre debe activar el evento.
 Por ejemplo, si activamos 'click' en dom.children[1].children[0].children[0]
 y dom.children[1] también sabe manejar 'click', entonces, luego de ejecutar
 el 'click' para dom.children[1].children[0].children[0], se deberá hacer el
-bubbling-up para que dom.children[1] maneje 'click'. Hay una excepción, sin
-embargo. Cuando el handler de un hijo describe falso luego de ejecutar,
-el bubbling-up se detiene.
+bubbling-up para que dom.children[1] maneje 'click'.
+
+Hay una excepción, sin embargo. Cuando el handler de un hijo describe falso
+luego de ejecutar, el bubbling-up se detiene.
 
 off por su parte, desactiva el handler asociado a un evento.
 
@@ -232,28 +279,124 @@ Se pide entonces que realice los cambios pertinentes para que los elementos
 del dom puedan tener este comportamiento.
 */
 
+DomElement.prototype.on = function(event, func) {
+    if(this.eventsOff[event]){
+        delete this.eventsOff[event];
+        
+    }
+    this.eventsOn ={...this.eventsOn, [event]: func};
+    console.log("on", this.eventsOn);
+}
+
+DomElement.prototype.off = function(event) {
+    this.eventsOff = {...this.eventsOff, [event]: this.eventsOn[event]};
+    delete this.eventsOn[event];
+    console.log("off", this.eventsOff);
+}
+
+DomElement.prototype.handle = function(event) {
+    if(this.eventsOn[event]){
+        this.eventsOn[event].call(this);
+    }
+}
+
+dom.children[1].children[0].children[0].on('click', function() {
+    console.log('Se apretó click en' + this.type);
+    return true;
+})
+
+dom.children[1].on('fullcolor', function() {
+    console.log('Se apretó click en' + this.type);
+    return true;
+})
+
+dom.children[1].off('fullcolor');
+
+dom.children[1].children[0].children[0].handle('click');
+dom.children[1].on('fullcolor', function() {
+    console.log('Se agrego full color ' + this.type);
+    return true;
+})
+
+dom.children[1].handle('fullcolor');
+
 
 /**************** PUNTO 3 ******************************/
 
 /*
 Queremos poder mostrar los nodos del dom de forma bonita
-en la terminal, mediante el metodo display.
+en la terminal, mediante el metodo display. Es decir,
+otra especie de toString para los nodos.
 
 dom.display()
 
 No todo nodo es visible sin embargo. Solo los elementos del body
 deben mostrarse en este caso, ya que el head y html son solo
 contenedores. Lo mismo ocurre con div, section y aside, que son
-elementos invisibles.
+elementos contenedores invisibles.
 
 Así, en este caso, solo vamos a mostrar los elementos h1 y p.
 Pero ¿Qué mostramos de ellos? Para hacer la cosa más divertida, vamos
-a agregar un atributo "contents" que nos permita agregar un texto
-a esos elementos como contenido. Ese texto será el que se muestre
-cuando llamemos a display.
+a agregar un atributo "contents" a cualquier nodo, que nos permita
+agregar un texto a esos elementos como contenido. Ese texto será el
+que se muestre cuando llamemos a display.
 
 Más aún, cada elemento se muestra de forma distinta según su tipo.
-p muestra contents tal cual, pero h1 lo muestra todo en mayúscula, siempre.
+p muestra contents tal cual, pero h1 lo muestra todo en mayúscula,
+siempre.
+
 Además el color del texto y del fondo depende del estilo del elemento,
+por lo que vamos a mostrarlo en color en la consola.
 (Ver https://stackoverflow.com/questions/9781218/how-to-change-node-jss-console-font-color)
+
+Por ejemplo,
+
+Node html {}
+  Node head {}
+  Node body {background:red, color:blue}
+    Node div {}
+      Node div {size:17, color:green}
+        Node h1 contents="Titulo 1" {}
+        Node p contents="Hola mundo" {}
+        Node p contents="Esto es un texto" {color: "red"}
+
+Mostraría:
+
+TITULO 1
+Hola mundo
+Esto es un texto (en rojo)
 */
+
+const color = {
+    black : "\x1b[30m",
+    red : "\x1b[31m",
+    green : "\x1b[32m",
+    yellow : "\x1b[33m",
+    blue : "\x1b[34m",
+    magenta : "\x1b[35m",
+    cyan : "\x1b[36m",
+    white :"\x1b[37m",
+
+}
+
+function chageStyle(element){
+    if(element.type === 'h1' && element.contents !== ''){
+        console.log(element.contents.toUpperCase());
+    }
+    if(element.type === 'p' && element.contents !== ''){
+        styles = Object.keys(element.styles);
+        console.log(color[element.styles.color],element.contents);
+    }
+}
+
+DomElement.prototype.display = function() {
+    for(let index = 0; index < this.children.length; index++) {
+        var element = this.children[index];
+        if(element.type === "h1" || element.type === "p"){
+            chageStyle(element);
+        }
+        element.display()
+    }
+}
+
+dom.display();
