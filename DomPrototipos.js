@@ -284,32 +284,52 @@ DomElement.prototype.on = function(event, func) {
         delete this.eventsOff[event];
         
     }
-    this.eventsOn ={...this.eventsOn, [event]: func};
+    this.eventsOn = {...this.eventsOn, [event]: func};
     console.log("on", this.eventsOn);
 }
 
 DomElement.prototype.off = function(event) {
-    this.eventsOff = {...this.eventsOff, [event]: this.eventsOn[event]};
-    delete this.eventsOn[event];
+    if(this.eventsOn[event]){   
+        this.eventsOff = {...this.eventsOff, [event]: this.eventsOn[event]};
+        delete this.eventsOn[event];
+    }
     console.log("off", this.eventsOff);
 }
 
 DomElement.prototype.handle = function(event) {
+    console.log("tipo", this.type);
     if(this.eventsOn[event]){
         this.eventsOn[event].call(this);
+    }
+    if(this.__proto__ && this.type !== 'html'){
+        this.__proto__.handle(event);
     }
 }
 
 dom.children[1].children[0].children[0].on('click', function() {
-    console.log('Se apretó click en' + this.type);
+    console.log('Se apretó click en: ' + this.type);
+    return true;
+})
+
+dom.children[1].children[0].on('click', function() {
+    console.log('Se apretó click en: ' + this.type);
+    return true;
+})
+
+dom.children[1].on('click', function() {
+    console.log('Se apretó click en: ' + this.type);
     return true;
 })
 
 dom.children[1].on('fullcolor', function() {
-    console.log('Se apretó click en' + this.type);
+    console.log('Se apretó click en: ' + this.type);
     return true;
 })
 
+dom.on('fullcolor', function() {
+    console.log('Se apretó click en' + this.type);
+    return true;
+})
 dom.children[1].off('fullcolor');
 
 dom.children[1].children[0].children[0].handle('click');
